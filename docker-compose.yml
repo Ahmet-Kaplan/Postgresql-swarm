@@ -1,0 +1,100 @@
+version: '3.5'
+
+networks:
+  pg-overlay-network:
+    driver: overlay
+
+# Reusable shared config
+x-env-shared: &env-shared
+  ports:
+    - 5432
+  networks:
+    - pg-overlay-network
+  # After 10 restarts don't try it again, otherwise it could affect other services on the host machine by restarting infinitely
+  restart: on-failure:10
+  # Limit the logging files to 10 with 100mb each, otherwise there is no limit until the disk is full
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "100mb"
+      max-file: "10"
+  env_file:
+    - ./pg_var.env
+
+x-pg-shared: &pg-shared
+  image: docker.io/bitnami/postgresql-repmgr:15
+  <<: *env-shared
+
+x-pg-deploy-shared: &pg-deploy-shared
+  mode: replicated
+  replicas: 1
+  restart_policy:
+    condition: on-failure
+    delay: 5s
+    max_attempts: 5
+    window: 60s       
+
+services:
+  pg-0:
+    deploy:
+      placement: 
+        constraints:
+		  - node.role == manager   
+      <<: *pg-deploy-shared
+    volumes:
+      - pg_master_data:/bitnami/postgresql
+    environment:
+      - REPMGR_NODE_NETWORK_NAME=pg-0
+      - REPMGR_NODE_NAME=pg-0
+    <<: *pg-shared
+
+  pg-1:
+    deploy:     
+      placement: 
+        constraints:
+          - "node.hostname==slave-01"
+      <<: *pg-deploy-shared
+    volumes:
+      - pg_slave01_data:/bitnami/postgresql
+    environment:
+      - REPMGR_NODE_NAME=pg-1
+      - REPMGR_NODE_NETWORK_NAME=pg-1
+    <<: *pg-shared
+  
+  pg-2:
+    deploy:    
+      placement: 
+        constraints:
+          - "node.hostname==slave-02"
+      <<: *pg-deploy-shared   
+    volumes:
+      - pg_slave02_data:/bitnami/postgresql
+    environment:
+      - REPMGR_NODE_NAME=pg-2
+      - REPMGR_NODE_NETWORK_NAME=pg-2
+    <<: *pg-shared
+	  
+  pgpool:
+    image: docker.io/bitnami/pgpool:4
+    deploy:
+      placement: 
+        constraints:
+		  - node.role == manager   
+      <<: *pg-deploy-shared
+    env_file:
+      - ./pg_pool.env
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/scripts/pgpool/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    <<: *env-shared
+	  
+	   
+volumes:
+  pg_master_data:
+    driver: local
+  pg_slave01_data:
+    driver: local
+  pg_slave02_data:
+    driver: local
