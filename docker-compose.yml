@@ -1,10 +1,20 @@
-version: '3.5'
+version: '3.3'
 
 networks:
   pg-overlay-network:
     driver: overlay
 
+
 # Reusable shared config
+x-pg-deploy-shared: &pg-deploy-shared
+  mode: replicated
+  replicas: 1
+  restart_policy:
+    condition: on-failure
+    delay: 5s
+    max_attempts: 5
+    window: 60s    
+
 x-env-shared: &env-shared
   ports:
     - 5432
@@ -21,26 +31,20 @@ x-env-shared: &env-shared
   env_file:
     - ./pg_var.env
 
+
 x-pg-shared: &pg-shared
   image: docker.io/bitnami/postgresql-repmgr:15
   <<: *env-shared
 
-x-pg-deploy-shared: &pg-deploy-shared
-  mode: replicated
-  replicas: 1
-  restart_policy:
-    condition: on-failure
-    delay: 5s
-    max_attempts: 5
-    window: 60s       
+
 
 services:
-  pg-0:
+  pg-0:    
     deploy:
-      placement: 
+      placement:
         constraints:
-		  - node.role == manager   
-      <<: *pg-deploy-shared
+        - node.hostname == manager
+      <<: *pg-deploy-shared 
     volumes:
       - pg_master_data:/bitnami/postgresql
     environment:
@@ -53,7 +57,7 @@ services:
       placement: 
         constraints:
           - "node.hostname==slave-01"
-      <<: *pg-deploy-shared
+      <<: *pg-deploy-shared 
     volumes:
       - pg_slave01_data:/bitnami/postgresql
     environment:
@@ -73,13 +77,12 @@ services:
       - REPMGR_NODE_NAME=pg-2
       - REPMGR_NODE_NETWORK_NAME=pg-2
     <<: *pg-shared
-	  
   pgpool:
     image: docker.io/bitnami/pgpool:4
     deploy:
-      placement: 
+      placement:
         constraints:
-		  - node.role == manager   
+        - node.hostname == manager
       <<: *pg-deploy-shared
     env_file:
       - ./pg_pool.env
@@ -89,8 +92,6 @@ services:
       timeout: 5s
       retries: 5
     <<: *env-shared
-	  
-	   
 volumes:
   pg_master_data:
     driver: local
