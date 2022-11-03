@@ -16,8 +16,8 @@ x-pg-deploy-shared: &pg-deploy-shared
     window: 60s    
 
 x-env-shared: &env-shared
-  ports:
-    - 5432
+  ports: 
+    - { mode: host, protocol: tcp, target: 5432, published: 5432 }
   networks:
     - pg-overlay-network
   # After 10 restarts don't try it again, otherwise it could affect other services on the host machine by restarting infinitely
