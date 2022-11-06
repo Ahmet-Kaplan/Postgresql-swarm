@@ -42,26 +42,13 @@ RUN install_packages  postgis postgresql-15-postgis-3 postgresql-15-postgis-3-sc
 
 ##[Extension][postgis] | copy
 RUN mv /usr/share/postgresql/15/extension/*postgis* /opt/bitnami/postgresql/share/extension/
-RUN mv /usr/lib/postgresql/15/lib/*postgis* /opt/bitnami/postgresql/lib/
-   
-######################
+RUN mv /usr/lib/postgresql/15/lib/*postgis* /opt/bitnami/postgresql/lib/   
 
-##[Extension][pg_cron]
-RUN install_packages postgresql-15-cron
-
-##[Extension][pg_cron] | copy
-RUN mv /usr/share/postgresql/15/extension/*pg_cron* /opt/bitnami/postgresql/share/extension/
-RUN mv /usr/lib/postgresql/15/lib/*pg_cron* /opt/bitnami/postgresql/lib/
-
-
-
-##[Extension][pg_cron] | clear
+##[Extension] | clear
 RUN apt-get clean all && \
     rm -rf /var/cache/apk/* && \
     rm -rf /tmp/* && \
     rm -rf /var/tmp/*
-
-
 
 COPY ./scripts/initdb-postgis.sh /docker-entrypoint-initdb.d/10_postgis.sh
 COPY ./scripts/update-postgis.sh /usr/local/bin
