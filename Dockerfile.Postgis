@@ -1,0 +1,15 @@
+FROM bitnami/postgresql-repmgr:15
+USER root
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes \
+    ca-certificates \
+    nano \
+    postgresql-plpython3-15 \
+    python3-psutil \
+    postgresql-15-pg-qualstats \
+    postgis postgresql-15-postgis-3 postgresql-15-postgis-3-scripts postgresql-contrib
+
+COPY ./scripts/initdb-postgis.sh /docker-entrypoint-initdb.d/10_postgis.sh
+COPY ./scripts/update-postgis.sh /usr/local/bin
+RUN echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen && locale-gen
+USER 1001
