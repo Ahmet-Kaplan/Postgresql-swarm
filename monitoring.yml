@@ -1,0 +1,73 @@
+version: '3.9'
+
+networks:
+  dbnetwork:
+    external: true      
+  traefik-public:
+    external: true
+
+
+services:
+  pgadmin4:
+    image: dpage/pgadmin4:latest
+    hostname: pgadmin
+    env_file:
+    - ./monitoring.env
+    networks:
+      - traefik-public
+      - dbnetwork
+    volumes:
+      - pgadmin_data:/pgadmin
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.pgadmin4-http.entrypoints=web"
+        - "traefik.http.routers.pgadmin4-http.rule=Host(`pgadmin.${DOMAIN_NAME}`)"
+        - "traefik.http.routers.pgadmin4.entrypoints=websecure"
+        - "traefik.http.routers.pgadmin4.rule=Host(`pgadmin.${DOMAIN_NAME}`)"
+        - "traefik.http.routers.pgadmin4-http.middlewares=pgadmin4-https@docker"
+        - "traefik.http.middlewares.pgadmin4-https.redirectscheme.scheme=https"
+        - "traefik.http.routers.pgadmin4.tls=true"
+        - "traefik.http.routers.pgadmin4.tls.certresolver=le"
+        - "traefik.http.services.pgadmin4.loadbalancer.server.port=80"
+
+  pghero:
+    # Docs: https://github.com/ankane/pghero
+    image: ankane/pghero:latest
+    env_file:
+    - ./monitoring.env
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    networks:
+      - traefik-public
+      - dbnetwork
+    volumes:
+      - ./scripts/pghero.yml:/app/config/pghero.yml
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    healthcheck:
+      test: CMD curl -v --fail --silent http://localhost:8080/health 2>&1
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      <<: *pg-deploy-shared
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.pgadmin4-http.entrypoints=web"
+        - "traefik.http.routers.pgadmin4-http.rule=Host(`pgadmin.${DOMAIN_NAME}`)"
+        - "traefik.http.routers.pgadmin4.entrypoints=websecure"
+        - "traefik.http.routers.pgadmin4.rule=Host(`pgadmin.${DOMAIN_NAME}`)"
+        - "traefik.http.routers.pgadmin4-http.middlewares=pgadmin4-https@docker"
+        - "traefik.http.middlewares.pgadmin4-https.redirectscheme.scheme=https"
+        - "traefik.http.routers.pgadmin4.tls=true"
+        - "traefik.http.routers.pgadmin4.tls.certresolver=le"
+        - "traefik.http.services.pgadmin4.loadbalancer.server.port=80"
+
+volumes:
+  pgadmin_data: {}

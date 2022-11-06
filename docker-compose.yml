@@ -1,9 +1,8 @@
-version: '3.3'
+version: '3.9'
 
 networks:
-  pg-overlay-network:
-    driver: overlay
-
+  dbnetwork:
+    external: true      
 
 # Reusable shared config
 x-pg-deploy-shared: &pg-deploy-shared
@@ -17,9 +16,9 @@ x-pg-deploy-shared: &pg-deploy-shared
 
 x-env-shared: &env-shared
   ports: 
-    - { mode: host, protocol: tcp, target: 5432, published: 5432 }
+    - 5432
   networks:
-    - pg-overlay-network
+    - dbnetwork
   # After 10 restarts don't try it again, otherwise it could affect other services on the host machine by restarting infinitely
   restart: on-failure:10
   # Limit the logging files to 10 with 100mb each, otherwise there is no limit until the disk is full
@@ -33,57 +32,74 @@ x-env-shared: &env-shared
 
 
 x-pg-shared: &pg-shared
-  image: docker.io/bitnami/postgresql-repmgr:15
+  build:
+    context: .
+    dockerfile: ./Dockerfile.Postgis
   <<: *env-shared
 
-
-
 services:
-  pg-0:    
+  pg-0:
+    hostname: pg-0
     deploy:
       placement:
-        constraints:
-        - node.hostname == manager
-      <<: *pg-deploy-shared 
+        constraints: [node.role == manager]
+      <<: *pg-deploy-shared
     volumes:
       - pg_master_data:/bitnami/postgresql
+      - type: bind # use bind mode otherwise the sh file is mounted as a folder
+        source: ./scripts/init_db.sh
+        target: /docker-entrypoint-initdb.d/init_db.sh
+        
+      - type: bind # use bind mode otherwise the sh file is mounted as a folder
+        source: ./scripts/init_hero.sql
+        target: /docker-entrypoint-initdb.d/init_hero.sql
+
     environment:
       - REPMGR_NODE_NETWORK_NAME=pg-0
       - REPMGR_NODE_NAME=pg-0
     <<: *pg-shared
 
   pg-1:
-    deploy:     
-      placement: 
+    hostname: pg-1
+    deploy:
+      placement:
         constraints:
-          - "node.hostname==slave-01"
-      <<: *pg-deploy-shared 
+          - node.hostname==slave-node01
+      <<: *pg-deploy-shared
     volumes:
       - pg_slave01_data:/bitnami/postgresql
     environment:
       - REPMGR_NODE_NAME=pg-1
       - REPMGR_NODE_NETWORK_NAME=pg-1
     <<: *pg-shared
-  
+
   pg-2:
-    deploy:    
-      placement: 
+    hostname: pg-2
+    deploy:
+      placement:
         constraints:
-          - "node.hostname==slave-02"
-      <<: *pg-deploy-shared   
+          - node.hostname==slave-node02
+      <<: *pg-deploy-shared
     volumes:
       - pg_slave02_data:/bitnami/postgresql
     environment:
       - REPMGR_NODE_NAME=pg-2
       - REPMGR_NODE_NETWORK_NAME=pg-2
     <<: *pg-shared
+
   pgpool:
     image: docker.io/bitnami/pgpool:4
+    hostname: pgpool
     deploy:
       placement:
-        constraints:
-        - node.hostname == manager
+        constraints: [node.role == manager]
       <<: *pg-deploy-shared
+    ports:
+      - 5432:5432
+    depends_on:
+      - pg-0
+      - pg-1
+      - pg-2
     env_file:
       - ./pg_pool.env
     healthcheck:
@@ -91,7 +107,18 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    <<: *env-shared
+    networks:
+      - dbnetwork
+    # After 10 restarts don't try it again, otherwise it could affect other services on the host machine by restarting infinitely
+    restart:
+      on-failure:10
+    # Limit the logging files to 10 with 100mb each, otherwise there is no limit until the disk is full
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100mb"
+        max-file: "10"
+
 volumes:
   pg_master_data:
     driver: local
