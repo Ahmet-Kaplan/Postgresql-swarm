@@ -2,7 +2,6 @@ version: '3.9'
 
 networks:
   dbnetwork:
-    external: true      
 
 # Reusable shared config
 x-pg-deploy-shared: &pg-deploy-shared
@@ -12,10 +11,10 @@ x-pg-deploy-shared: &pg-deploy-shared
     condition: on-failure
     delay: 5s
     max_attempts: 5
-    window: 60s    
+    window: 60s
 
 x-env-shared: &env-shared
-  ports: 
+  ports:
     - 5432
   networks:
     - dbnetwork
@@ -32,6 +31,7 @@ x-env-shared: &env-shared
 
 
 x-pg-shared: &pg-shared
+  image: kaplan38/postgis-repmgr
   build:
     context: .
     dockerfile: ./Dockerfile.Postgis
@@ -49,7 +49,7 @@ services:
       - type: bind # use bind mode otherwise the sh file is mounted as a folder
         source: ./scripts/init_db.sh
         target: /docker-entrypoint-initdb.d/init_db.sh
-        
+
       - type: bind # use bind mode otherwise the sh file is mounted as a folder
         source: ./scripts/init_hero.sql
         target: /docker-entrypoint-initdb.d/init_hero.sql
